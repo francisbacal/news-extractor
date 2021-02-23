@@ -1,0 +1,16 @@
+nltk
+newspaper3k
+cchardet
+cloudscraper
+Unidecode
+pymongo
+datefinder
+selenium
+python-dateutil
+python-dotenv
+psutil
+tld
+beautifulsoup4
+fake-useragent
+advertools
+pebble

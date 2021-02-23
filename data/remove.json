@@ -1,0 +1,20 @@
+{
+  "remove-sites": [
+    {
+      "name": "Mozilla Mercurial Repo",
+      "domain": "hg\\.mozilla\\.org$"
+    },
+    {
+      "name": "Youtube",
+      "domain": "www\\.youtube\\.com$"
+    },
+    {
+      "name": "Facebook",
+      "domain": "www\\.facebook\\.com$"
+    },
+    {
+      "name": "Twitter",
+      "domain": "www\\.twitter\\.com$"
+    }
+  ]
+}
