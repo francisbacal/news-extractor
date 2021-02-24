@@ -2,7 +2,7 @@
 from logs import init_log
 from newsextractor import News, DynamicSource, name_entity
 from .endpoints import LinksAPI, ArticlesAPI, WebsiteAPI, MediaValues
-from .exceptions import *
+from endpoints.exceptions import *
 
 from pebble import ProcessPool
 from concurrent.futures import ThreadPoolExecutor, as_completed

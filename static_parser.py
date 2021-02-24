@@ -56,7 +56,7 @@ if __name__ == '__main__':
     while True:
         # CHECK IF NEED TO END SCRAPER
         if StaticScraper.endtime(for_article=FOR_ARTICLE):
-            log.debug("Pass End Time") 
+            log.debug("Pass End Time")
             break
 
         # CHECK FOR UNPROCESSED LINKS
@@ -68,6 +68,7 @@ if __name__ == '__main__':
         date_format = date.strftime("%Y-%m-%d-%H%M%S")
         log.info(f"Started scraper at {date_format}")
 
+        
         # CHECK FOR QUEUED ARTICLES. SLEEP IF NONE FOUND
         if StaticScraper.check_queued(FOR_ARTICLE) == 0:
             log.info("No article to scrape. Sleeping...")
@@ -75,7 +76,7 @@ if __name__ == '__main__':
                 break
             else:
                 continue
-         
+        
         # GET LINKS TO PROCESS
         articles = StaticScraper.get_queued_links(LIMIT * NUM_PROCESS, for_article=FOR_ARTICLE)
 
@@ -84,7 +85,6 @@ if __name__ == '__main__':
 
         # BREAK IF NOT LOOP
         if not LOOP: break
-
 
     os.unlink(PID_FILE)
                 

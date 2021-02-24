@@ -1,5 +1,5 @@
 """
-Scraper Custom Exceptions
+Endpoints Custom Exceptions
 """
 
 class APIServerError(Exception):

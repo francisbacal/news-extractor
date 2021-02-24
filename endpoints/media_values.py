@@ -1,4 +1,4 @@
-from ..exceptions import APIServerError
+from .exceptions import APIServerError
 from options import *
 import requests, json, datetime
 

@@ -1,7 +1,7 @@
 from urllib.parse import urlparse
 from bson import json_util
 from options import *
-from ..exceptions import ArticlesAPIError
+from .exceptions import ArticlesAPIError
 
 import json, datetime, requests
 

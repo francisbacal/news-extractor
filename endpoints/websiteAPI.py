@@ -3,7 +3,7 @@ from options import *
 from tld import get_tld
 from newsextractor import Fetch, MediaURL, ArticleURL
 
-from ..exceptions import *
+from .exceptions import *
 
 class WebsiteAPI:
     """

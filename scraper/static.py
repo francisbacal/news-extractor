@@ -2,8 +2,8 @@
 from pprint import pprint
 from logs import init_log
 from newsextractor import News, StaticSource, name_entity
-from .endpoints import LinksAPI, ArticlesAPI, WebsiteAPI, MediaValues
-from .exceptions import *
+from endpoints import LinksAPI, ArticlesAPI, WebsiteAPI, MediaValues
+from endpoints.exceptions import *
 
 from pebble import ProcessPool
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -133,20 +133,23 @@ class StaticScraper:
 
         MAX_UNPROCESSED = 10000
 
-        if for_article: 
+        if not for_article: 
             QUERY = {"status": status, "created_by": "System"} 
         else:
             QUERY = {"article_status": {"$in": [status, "Processing"]}, "created_by": {"$in": ["System", "Python News Crawler"]}}
 
-        linksAPI = LinksAPI() if for_article else ArticlesAPI()
+
+        API = LinksAPI() if for_article else ArticlesAPI()
 
         while True:
-            unprocessed_count = linksAPI.counts(QUERY)
+            unprocessed_count = API.counts(QUERY)
 
-            if unprocessed_count > MAX_UNPROCESSED:
+            if not unprocessed_count: break
+
+            if unprocessed_count > MAX_UNPROCESSED: 
                 unprocessed_count = MAX_UNPROCESSED
         
-            unprocessed_links = linksAPI.get(query=QUERY, limit=unprocessed_count)
+            unprocessed_links = API.get(query=QUERY, limit=unprocessed_count)
             log.info(f"Unprocessed links - {len(unprocessed_links)}")
 
             if unprocessed_links:
@@ -154,7 +157,7 @@ class StaticScraper:
                 
                 # UPDATE TO QUEUE
                 with ThreadPoolExecutor() as executor:
-                    executor.map(StaticScraper.update_to_queued, unprocessed_links)
+                    executor.map(StaticScraper.update_to_queued, unprocessed_links, [for_article] * len(unprocessed_links))
             else:
                 break
 

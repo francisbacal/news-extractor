@@ -3,7 +3,7 @@ import threading, json, time
 from urllib.parse import urlparse
 from ..content import Content
 from ..helpers import Compare
-from scraper.endpoints import ArticlesAPI
+from endpoints import ArticlesAPI
 
 from selenium.common.exceptions import TimeoutException
 
