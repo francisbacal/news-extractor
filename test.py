@@ -44,11 +44,11 @@ import datefinder, datetime, json
 # print(news.content)
 
 # url = "https://www.msn.com/en-ph/money/business/greenfield-devt-facing-competition-complaint-over-isp-choice/ar-BB1dHcUk?li=BBr8Mkn"
-# url = "http://finance.yahoo.com/finance/news/pimco-canada-corp-announces-monthly-171900397.html"
+url = "http://finance.yahoo.com/finance/news/pimco-canada-corp-announces-monthly-171900397.html"
 # url = "https://ph.news.yahoo.com/2021-chevrolet-trailblazer-review-cute-150000979.html"
 # url = "https://www.scmp.com/news/china/diplomacy/article/3122706/top-eu-diplomats-step-criticism-chinas-crackdown-hong-kong"
-# src = StaticSource(url)
-# s = src.text
+src = StaticSource(url)
+s = src.text
 
 # title = Title(s)
 # print(title.text)
@@ -56,18 +56,18 @@ import datefinder, datetime, json
 # print(content.text)
 
 
-# news = News(url, s)
+news = News(url, s)
 
-# data = news.generate_data()
+data = news.generate_data()
 
-# print(json.dumps(data, indent=4))
+print(json.dumps(data, indent=4))
 
 # pprint(data)
 
-c_data = Compare(["AUTHOR"])
+# c_data = Compare(["AUTHOR"])
 
-word = "cse_author"
+# word = "cse_author"
 
-result = c_data.eval(word)
+# result = c_data.eval(word)
 
-print(result)
+# print(result)

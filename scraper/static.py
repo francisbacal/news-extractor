@@ -1,4 +1,5 @@
 
+from pprint import pprint
 from logs import init_log
 from newsextractor import News, StaticSource, name_entity
 from .endpoints import LinksAPI, ArticlesAPI, WebsiteAPI, MediaValues
@@ -42,7 +43,7 @@ class StaticScraper:
             future = executor.map(StaticScraper.multithread, splitted_articles, [func] * len(splitted_articles), [for_article] * len(splitted_articles), timeout=900)
 
             try:
-                for result in future.result:
+                for result in future.result():
                     if result: print(result)
             except TimeoutError:
                 log.debug("TimeoutError")
@@ -75,7 +76,7 @@ class StaticScraper:
         # START MULTITHREAD
         with ThreadPoolExecutor() as executor:
 
-            futures = [executor.submit(func, article) for article in articles]
+            futures = [executor.submit(func, article, for_article) for article in articles]
 
             for future in as_completed(futures):
                 try:
@@ -239,9 +240,9 @@ class StaticScraper:
 
         # UPDATE TO PROCESSING STATUS
         with ThreadPoolExecutor() as executor:
-            articles_for_scraping = executor.map(StaticScraper.update_to_processing, queued_articles)
+            articles_for_scraping = executor.map(StaticScraper.update_to_processing, queued_articles, [for_article] * len(queued_articles))
 
-        return articles_for_scraping
+        return list(articles_for_scraping)
 
     @staticmethod
     def update_to_processing(article: dict, for_article=False):
@@ -322,21 +323,25 @@ class StaticScraper:
         return False
 
     @staticmethod
-    def check_website(article_id: str, article_url: str):
+    def check_website(article_id: str, article_url: str, for_article: bool=False):
         """
         Check website data if for scraping
         """
         website = WebsiteAPI()
         website.check(article_url)
 
+        API = LinksAPI() if not for_article else ArticlesAPI()
+
         if website.checked and not website.for_scraping:
             # UPDATE PAYLOAD
             update_payload = {"status": "Error"} if not for_article else {"article_status": "Error", "article_error_status": "Unverified Website"}
             try:
-                articleAPI.update(article_id, update_payload)
-            except:
+                API.update(article_id, update_payload)
+            except Exception as e:
+                log.error(e, exc_info=True)
                 return False
 
+            log.debug(f"Skipping Website with id: {website._id}")
             return False
 
         elif not website.checked:
@@ -370,13 +375,17 @@ class StaticScraper:
         website = WebsiteAPI()
 
         language = "en" # EDIT FOR FUTURE USE
+        
         article_id = article['_id']
+
         article_url = article['original_url'] if not for_article else article['article_url']
         article_status = article['status'] if not for_article else article['article_status']
 
         try:
             # CHECK IF WEBSITE EXISTS IN DATABASE AND IS FOR SCRAPING
-            website_id = StaticScraper.check_website(article_id, article_url)
+            website_id = StaticScraper.check_website(article_id, article_url, for_article)
+
+            if not website_id: return f"Website not for scraping"
 
             # GET SOURCE PAGE OF ARTICLE
             source = StaticSource(article_url)

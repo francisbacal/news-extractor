@@ -3,6 +3,7 @@ import threading, json, time
 from urllib.parse import urlparse
 from ..content import Content
 from ..helpers import Compare
+from scraper.endpoints import ArticlesAPI
 
 from selenium.common.exceptions import TimeoutException
 
@@ -16,7 +17,7 @@ class DynamicSource(threading.Thread):
             timeout           -   timeout for getting source [Default: 1800]
     """
 
-    def __init__(self, in_queue, out_queue, browser, timeout=1800):
+    def __init__(self, in_queue, out_queue, browser, for_article: bool=False, timeout=1800):
 
         threading.Thread.__init__(self)
         self.in_queue = in_queue
@@ -24,7 +25,7 @@ class DynamicSource(threading.Thread):
         self.browser = browser
         self.timeout = timeout
         self.page_source = None
-        self.url = None
+        self.article_url = None
 
         self.stop_thread = False
         self.global_link = global_link
@@ -39,13 +40,28 @@ class DynamicSource(threading.Thread):
                 if self.stop_thread:
                     break
 
-                self.url = self.in_queue.get()
+                articlesAPI = ArticlesAPI()
+
+                article = self.in_queue.get()
+                self.article_url = article['original_url'] if for_article else article['article_url']
+
+                # CHECK IF EXISTING
+                existing = articlesAPI.get({"article_url": self.article_url})
+
+                if existing:
+                    self.page_source = "Duplicate"
+                    data = (article, self.page_source)
+
+                    self.out_queue.put(data)
+                    self.in_queue.task_done()
+                    continue
 
                 # CHECK IF LAZY LOADED
-                is_lazy = self.__check_lazy(self.url, 'data/lazy.json')
+                is_lazy = self.__check_lazy(self.article_url, 'data/lazy.json')
 
+                # GET PAGE SOURCE VIA SELENIUM
                 try:
-                    self.browser.get(self.url)
+                    self.browser.get(self.article_url)
 
                     is_html = True
                     try:
@@ -66,7 +82,7 @@ class DynamicSource(threading.Thread):
                 except Exception as e:
                     self.page_source = None
 
-                data = (self.url, self.page_source)
+                data = (article, self.page_source)
 
                 self.out_queue.put(data)
                 self.in_queue.task_done()

@@ -63,6 +63,7 @@ class DynamicScraper:
 
         in_queue = queue.Queue()
         out_queue = queue.Queue()
+        result_queue = queue.Queue()
 
         if not articles: return
 
@@ -90,7 +91,7 @@ class DynamicScraper:
             seledriver = Seledriver(browser="fox")
             browsers.append(seledriver)
                 
-            process_source = DynamicSource(in_queue, out_queue, seledriver, timeout=900)
+            process_source = DynamicSource(in_queue, out_queue, seledriver, for_article=for_article, timeout=900)
             process_source.setDaemon(True)
             process_sources.append(process_source)
             process_source.start()
@@ -102,8 +103,8 @@ class DynamicScraper:
 
         # QUEUE LINKS
         log.debug('Queueing Links...')
-        for link in links:
-            in_queue.put(link)
+        for article in articles:
+            in_queue.put(article)
         log.debug('Done Queueing Links...')
 
         # PROCESS ARTICLES
@@ -371,18 +372,20 @@ class DynamicScraper:
         return False
 
     @staticmethod
-    def check_website(article_id: str, article_url: str):
+    def check_website(article_id: str, article_url: str, for_article: bool=False):
         """
         Check website data if for scraping
         """
         website = WebsiteAPI()
         website.check(article_url)
 
+        API = LinksAPI() if not for_article else ArticlesAPI()
+
         if website.checked and not website.for_scraping:
             # UPDATE PAYLOAD
             update_payload = {"status": "Error"} if not for_article else {"article_status": "Error", "article_error_status": "Unverified Website"}
             try:
-                articleAPI.update(article_id, update_payload)
+                API.update(article_id, update_payload)
             except:
                 return False
 
@@ -521,13 +524,12 @@ class DynamicScraper:
         return news_data
 
 
-
 class ParseArticle(threading.Thread):
     """
     Thread parser for dynamic articles
     """
 
-    def __init__(self, out_queue, result_queue, timeout=1800):
+    def __init__(self, out_queue, result_queue, for_article: bool=False, timeout=1800):
         """
         Initialization
         """
@@ -535,6 +537,7 @@ class ParseArticle(threading.Thread):
         self.out_queue = out_queue
         self.result_queue = result_queue
         self.stop_thread = False
+        self.for_article = for_article
 
     def run(self):
         """
@@ -542,6 +545,61 @@ class ParseArticle(threading.Thread):
         """
         while True:
             if self.stop_thread: break
+
+            item = self.out_queue.get()
+            article = item[0]
+            source = item[1]
+
+            # CHECK IF SOURCE IS DUPLICATE
+            if source == "Duplicate": 
+                result = "Duplicate Article"
+                self.result_queue.put(result)
+                self.out_queue.task_done()
+                continue
+
+            self.article_url = article['original_url'] if not self.for_article else article['article_url']
+            self._id = article['_id']
+
+            is_lazy = self.__check_lazy(self.article_url, 'data/lazy.json')
+
+            # CHECK IF WEBSITE EXISTS IN DATABASE AND IS FOR SCRAPING
+            website_id = DynamicScraper.check_website(article_id, article_url)
+
+            if not website_id: 
+                result = "Website not for scraping"
+                self.result_queue.put(result)
+                self.out_queue.task_done()
+                continue
+
+            else:
+                country = website.get_one(website._id)['country']
+                language = "tl" if country == "Philippines" else "en"
+
+
+    
+
+    def __check_lazy(self, url: str, json_file: str):
+        """
+        Checks if article link has lazy loaded content
+            @params:
+                url         - Required    : article url (String)
+                json_file   - Required    : json filename with extension that contains websites that has lazy loaded content (String)
+        """
+        parsed_url = urlparse(url)
+        # protocol = parsed_url.scheme
+        domain = parsed_url.netloc
+
+        with open(json_file) as lazy_sites:
+            data = json.load(lazy_sites)
+
+            for i in data['lazy-sites']:
+                match = re.match(i['domain'], domain)
+                if match:
+                    return True
+            
+        return False
+
+
             
 
     def stop(self):

@@ -3,7 +3,7 @@ from bson import json_util
 from options import *
 from ..exceptions import ArticlesAPIError
 
-import json, datetime
+import json, datetime, requests
 
 
 class ArticlesAPI:
@@ -66,7 +66,7 @@ class ArticlesAPI:
 
         try:
             response = requests.post(endpoint, params=params, data=json.dumps(query, default=json_util.default), headers=self.headers)
-            result = result.json()['data']
+            result = response.json()['data']
 
             return result
         except:
@@ -79,7 +79,6 @@ class ArticlesAPI:
                 id        -   ID of article link to get
         """
         endpoint = f"{self.options.get_endpoint('article')}/{_id}"
-
         try:
             response = requests.get(endpoint, headers=self.headers)
             result = response.json()['data']
@@ -104,7 +103,7 @@ class ArticlesAPI:
         query['date_updated'] = datetime.datetime.now().isoformat()
 
         try:
-            response = requests.put(url, data=json.dumps(body), headers=self.headers)
+            response = requests.put(endpoint, data=json.dumps(query), headers=self.headers)
             result = response.json()['data']
 
             return result

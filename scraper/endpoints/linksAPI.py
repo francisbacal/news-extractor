@@ -2,7 +2,7 @@ from urllib.parse import urlparse
 from bson import json_util
 from options import *
 
-import json
+import json, requests
 
 
 class LinksAPI:
@@ -31,7 +31,7 @@ class LinksAPI:
         
         try:
             response = requests.post(endpoint, params=params, data=json.dumps(query, default=json_util.default), headers=self.headers)
-            result = result.json()['data']
+            result = response.json()['data']
 
             return result
         except:
@@ -64,7 +64,7 @@ class LinksAPI:
         endpoint = f"{self.options.get_endpoint('global-link')}/{_id}"
 
         try:
-            response = requests.put(url, data=json.dumps(body), headers=self.headers)
+            response = requests.put(endpoint, data=json.dumps(query), headers=self.headers)
             result = response.json()['data']
 
             return result

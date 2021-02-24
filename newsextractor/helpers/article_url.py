@@ -1,5 +1,6 @@
 from ..exceptions import HelperError
 from urllib.parse import urlparse
+from tld import get_tld
 
 import re
 

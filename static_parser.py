@@ -1,7 +1,8 @@
 
-import sys, os, socket, time
+import sys, os, socket, time, datetime
 from scraper.static import StaticScraper
 from logs import init_log
+from pprint import pprint
 
 #########################################
 ####                                 ####
@@ -43,12 +44,8 @@ if __name__ == '__main__':
     # CHECK IF PROCESS IS ALREADY RUNNING
     PID = str(os.getpid())
     PID_FILE = f"{str(socket.gethostname())}.pid"
-    try:
-        PID_FILE_PROCESS = int(open(PID_FILE, 'r').readlines[0])
-    except FileNotFoundError:
-        PID_FILE_PROCESS = int(open(PID_FILE, 'w').readlines[0])
 
-    if all([PID_FILE_PROCESS is not None, (os.path.isfile(PID_FILE) and StaticScraper.is_running(PID_FILE_PROCESS))]):
+    if os.path.isfile(PID_FILE) and StaticScraper.is_running(int(open(PID_FILE, 'r').readlines()[0])):
         log.debug(f"Process {PID} already running")
         sys.exit()
     else:
@@ -58,7 +55,9 @@ if __name__ == '__main__':
     # MAIN LOOP
     while True:
         # CHECK IF NEED TO END SCRAPER
-        if StaticScraper.endtime(for_article=FOR_ARTICLE): break
+        if StaticScraper.endtime(for_article=FOR_ARTICLE):
+            log.debug("Pass End Time") 
+            break
 
         # CHECK FOR UNPROCESSED LINKS
         StaticScraper.check_unprocessed_links(for_article=FOR_ARTICLE)
@@ -83,8 +82,11 @@ if __name__ == '__main__':
         # CALL MAIN PROCESS
         StaticScraper.multiprocess(articles, NUM_PROCESS, StaticScraper.parse_article, for_article=FOR_ARTICLE)
 
+        # BREAK IF NOT LOOP
+        if not LOOP: break
 
-    os.unlink(pidfile)
+
+    os.unlink(PID_FILE)
                 
 
 

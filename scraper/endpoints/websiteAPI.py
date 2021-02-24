@@ -1,7 +1,7 @@
 import requests, json, re, random, time, datetime
 from options import *
 from tld import get_tld
-from newsextractor import Fetch, MediaURL
+from newsextractor import Fetch, MediaURL, ArticleURL
 
 from ..exceptions import *
 
@@ -99,7 +99,7 @@ class WebsiteAPI:
         if not _id:
             return None
         
-        url = f"{self.options.get_endpoint}/{_id}"
+        url = f"{self.options.get_endpoint('web')}/{_id}"
 
         try:
             response = requests.get(url, headers=self.headers)
@@ -377,14 +377,14 @@ class WebsiteAPI:
             @params:  article_url       -    url of website
         """
         _article_url = ArticleURL(article_url)
-
+        
         try:
-            ws = get_tld(_article_url.link, fix_protocol=True, as_object=True)
+            ws = get_tld(_article_url.url, fix_protocol=True, as_object=True)
         except:
             ws = None
 
         self.protocol = "http"
-
+        
         if ws:
             self.domain = ws.domain
             self.tld = ws.tld
@@ -397,12 +397,12 @@ class WebsiteAPI:
             else:
                 _subdomain = f"{self.subdomain}."
 
-            self.netloc = f"{_subdomain}{self.domain}.{self.tld}"
+            self.netloc = _article_url.netloc
             clean_sub = re.sub(r"(www\.)?", "", _subdomain)
 
             self.fqdn = f"{clean_sub}{self.domain}.{self.tld}"
         else:
-            self.netloc = _article_url.domain
+            self.netloc = _article_url.netloc
             self.subdomain = ""
             self.tld = ""
             self.fqdn = re.sub(r"(www\.)?", "", self.netloc)
