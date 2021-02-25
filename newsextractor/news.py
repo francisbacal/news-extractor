@@ -67,8 +67,8 @@ class News:
         title = catch('None', lambda: Title(clean_html))
 
         # CONTENT
-        content = catch('None', lambda: Content(clean_html, title.text) if title 
-                        else Content(clean_html, article.title) if article
+        content = catch('None', lambda: Content(clean_html, title.text, lang=self.laang) if title 
+                        else Content(clean_html, article.title, lang=self.lang) if article
                         else None)
 
         # CLASS VARIABLES

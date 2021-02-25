@@ -73,6 +73,8 @@ class DynamicSource(threading.Thread):
                         is_html = True   
 
                     self.page_source = self.browser.page_source
+
+                    # IF SITE IS IN lazy.json, RUN SCROLL METHOD
                     if is_lazy: self.page_source = self.__navigate_scroll()
 
                 except TimeoutException as e:

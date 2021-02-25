@@ -7,7 +7,7 @@ from endpoints.exceptions import *
 from pebble import ProcessPool
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import current_process
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 import os, sys, datetime, socket, time, random, threading
 
@@ -86,14 +86,14 @@ class DynamicScraper:
         log.info(f"Process {current_process().name} started")
 
         # INSTANTIATE DRIVER/BROWSER AND GET SOURCE FOR PROCESSING
-        process_sources = []
+        source_processors = []
         for i in range(WORKERS):
             seledriver = Seledriver(browser="fox")
             browsers.append(seledriver)
                 
-            process_source = DynamicSource(in_queue, out_queue, seledriver, for_article=for_article, timeout=900)
+            process_source = DynamicSource(in_queue, out_queue, seledriver.driver, for_article=for_article, timeout=900)
             process_source.setDaemon(True)
-            process_sources.append(process_source)
+            source_processors.append(process_source)
             process_source.start()
 
             # DELAY PER INSTANTIATION
@@ -111,36 +111,81 @@ class DynamicScraper:
         parsers = []
 
         for _ in range(REMAINING_WORKERS):
-            process_article = ParseArticle(out_queue, result_queue, update=False, timeout=900, log=log)
+            process_article = ParseArticle(out_queue, result_queue, for_article=for_article, timeout=900, log=log)
             process_article.setDaemon(True)
             parsers.append(process_article)
             process_article.start()
 
-        # RESULT VARS
-        scraped = []
-        results = []
-
-        # START MULTITHREAD
-        with ThreadPoolExecutor() as executor:
-
-            futures = [executor.submit(func, article) for article in articles]
-
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-
-                    log.debug(result)
-                    
-                    if result == "Article Scraped":
-                        scraped.append(result)
-                    else:
-                        results.append(result)
-                
-                except Exception as e:
-                    log.error(e, exc_info=True)
-                    continue
         
-        return results
+        # STOP THREADS AND EXIT PROCESS AFTER TIMEOUT SECONDS
+        DynamicScraper.check_process_timeout(in_queue, source_processors, parsers, browsers, timeout=1800)
+
+        # JOIN QUEUES
+        in_queue.join()
+        out_queue.join()
+        log.debug('DONE JOINING QUEUES')
+
+        scraped_count = 0
+        while True:
+            try:
+                parsing_result = result_queue.get(block=0)
+                if parsing_result == "Article Scraped": scraped_count += 1
+
+                result_queue.task_done()
+    
+            except queue.Empty:
+                break
+
+        # JOIN RESULT QUEUE
+        result_queue.join()
+
+        # CLOSE THREAD BROWSERS
+        for browser in browsers:
+            try:
+                log.debug(f"Closing browser {browser.name}")
+                browser.close()
+                browser.quit()
+            except Exception as e:
+                log.error(f"Driver error on quit: {e}", exc_info=True)
+                raise
+       
+        log.info(f"Done scraping. Scraped count: {scraped_count}")
+
+    @staticmethod
+    def check_process_timeout(in_queue: queue.Queue, source_processors: Iterable[DynamicSource], parsers: Iterable[ParseArticle], 
+                            browsers: Iterable[Seledriver], timeout: int=1800):
+        """
+        Method to stop process after timeout seconds
+        """
+        TIMEOUT = timeout
+        time_start = time.time()
+
+        while time.time() - time_start <= TIMEOUT:
+            if in_queue.empty():
+                break
+
+            time.sleep(.1)
+        else:
+            log.info("Timed out. Terminating Threads")
+
+            for processor in source_processors:
+                processor.stop()
+
+            for parser in parsers:
+                parser.stop()
+
+            log.debug("Closing Thread browsers...")
+
+            for browser in browsers:
+                try:
+                    log.debug(f"{browser.name} closing")
+                    browser.driver.close()
+                    browser.driver.quit()
+                except Exception as e:
+                    log.error(f"Driver closing error : {e}", exc_info=True)
+                    raise
+        
+            sys.exit()
 
     @staticmethod
     def split_list(input_list: list, n: int):
@@ -186,15 +231,15 @@ class DynamicScraper:
         else:
             QUERY = {"article_status": {"$in": [status, "Processing"]}, "created_by": {"$in": ["JS_link", "JS_lazy"]}}
 
-        linksAPI = LinksAPI() if for_article else ArticlesAPI()
+        API = LinksAPI() if for_article else ArticlesAPI()
 
         while True:
-            unprocessed_count = linksAPI.counts(QUERY)
+            unprocessed_count = API.counts(QUERY)
 
             if unprocessed_count > MAX_UNPROCESSED:
                 unprocessed_count = MAX_UNPROCESSED
         
-            unprocessed_links = linksAPI.get(query=QUERY, limit=unprocessed_count)
+            unprocessed_links = API.get(query=QUERY, limit=unprocessed_count)
             log.info(f"Unprocessed links - {len(unprocessed_links)}")
 
             if unprocessed_links:
@@ -202,7 +247,7 @@ class DynamicScraper:
                 
                 # UPDATE TO QUEUE
                 with ThreadPoolExecutor(max_workers=2) as executor:
-                    executor.map(DynamicScraper.update_to_queued, unprocessed_links)
+                    executor.map(DynamicScraper.update_to_queued, unprocessed_links, [for_article] * len(unprocessed_links))
             else:
                 break
 
@@ -289,9 +334,9 @@ class DynamicScraper:
 
         # UPDATE TO PROCESSING STATUS
         with ThreadPoolExecutor() as executor:
-            articles_for_scraping = executor.map(DynamicScraper.update_to_processing, queued_articles)
+            articles_for_scraping = executor.map(DynamicScraper.update_to_processing, queued_articles, [for_article] * len(queued_articles))
 
-        return articles_for_scraping
+        return list(articles_for_scraping)
 
     @staticmethod
     def update_to_processing(article: dict, for_article=False):
@@ -408,7 +453,7 @@ class DynamicScraper:
         API.update(article_id, UPDATE_PAYLOAD)
 
     @staticmethod
-    def parse_article(article: dict, for_article=False):
+    def parse_article(article: dict, language="en", for_article=False):
         """
         Parse article data
             @params:
@@ -421,7 +466,7 @@ class DynamicScraper:
         articlesAPI = ArticlesAPI()
         website = WebsiteAPI()
 
-        language = "en" # EDIT FOR FUTURE USE
+        # language = "en" # EDIT FOR FUTURE USE
         article_id = article['_id']
         article_url = article['original_url'] if not for_article else article['article_url']
         article_status = article['status'] if not for_article else article['article_status']
@@ -523,7 +568,6 @@ class DynamicScraper:
 
         return news_data
 
-
 class ParseArticle(threading.Thread):
     """
     Thread parser for dynamic articles
@@ -538,6 +582,9 @@ class ParseArticle(threading.Thread):
         self.result_queue = result_queue
         self.stop_thread = False
         self.for_article = for_article
+        self.API = LinksAPI() if not for_article else ArticlesAPI()
+        self.timeout = timeout
+        self.news = None
 
     def run(self):
         """
@@ -549,10 +596,20 @@ class ParseArticle(threading.Thread):
             item = self.out_queue.get()
             article = item[0]
             source = item[1]
+            language = "en"
+
+            # UPDATE STATUS TO JS_ERROR IF NO SOURCE
+            if not source:
+                result = "Error getting page source. Connection Timeout"
+                self.__update_to_error(article['_id'], result)
+                self.result_queue.put(result)
+                self.out_queue.task_done()
+                continue
 
             # CHECK IF SOURCE IS DUPLICATE
             if source == "Duplicate": 
-                result = "Duplicate Article"
+                result = "Duplicate Article Found in Database"
+                self.__update_to_error(article['_id'], result)
                 self.result_queue.put(result)
                 self.out_queue.task_done()
                 continue
@@ -566,7 +623,8 @@ class ParseArticle(threading.Thread):
             website_id = DynamicScraper.check_website(article_id, article_url)
 
             if not website_id: 
-                result = "Website not for scraping"
+                result = "Unverified website"
+                self.__update_to_error(self._id, result)
                 self.result_queue.put(result)
                 self.out_queue.task_done()
                 continue
@@ -576,7 +634,87 @@ class ParseArticle(threading.Thread):
                 language = "tl" if country == "Philippines" else "en"
 
 
-    
+            # INSTANTIATE NEWS
+            try:
+                self.news = News(self.article_url, source, lang=language)
+            except Exception as e:
+                log.debug(f"Error while processing article {self.article_url}")
+                log.error(f"Error with {self.article_url}: {e}", exc_info=True)
+
+                self.__update_to_error(self._id, e)
+                self.result_queue.put(e)
+                self.out_queue.task_done()
+                continue
+
+            # PROCESS NEWS INCLUDING VALIDATIONS
+            result = self.__process_news()
+            self.result_queue.put(result)
+            self.out_queue.task_done()
+
+
+    def __process_news(self):
+        """
+        Process News Data
+        """
+
+        news_data = self.news.generate_data()
+        
+        # VALIDATE CONTENT
+        if not self.news.content:
+            DynamicScraper.update_article_error(article_id, "Invalid Content", for_article=for_article)
+            return "No Content"
+
+        # VALIDATE AUTHORS
+        authors = [news_data['article_authors']]
+
+        if not isinstance(authors, list):
+            authors = [authors]
+
+        try:
+            news_data['article_authors'] = name_entity(authors)
+        except:
+            news_data['article_authors'] = authors
+
+        if authors and not news_data['article_authors']:
+            news_data['article_authors'] = authors
+
+        # VALIDATE TITLE
+        if not news_data['article_title']:
+            DynamicScraper.update_article_error(article_id, "Invalid article title", for_article=for_article)
+            return "No Title"
+
+        # GET MEDIA VALUES
+        if website_id:
+            media_value_payload = {
+                "text": news_data['article_content'],
+                "images": news_data['article_images'],
+                "videos": news_data['article_videos']
+            }
+
+            media_values = MediaValues(website_id, media_value_payload)
+
+            news_data['article_ad_value'] = media_value['advalue']
+            news_data['article_pr_value'] = media_value['prvalue']
+
+        # SAVE/UPDATE ARTICLE
+        if not for_article:
+            articlesAPI.add(news_data)
+        else:
+            articlesAPI.update(article_id, news_data)
+
+        return "Article Scraped"
+
+
+
+    def __update_to_error(self, article_id: str, error: str):
+        """
+        Update global link or article link to error status
+        """
+
+        PAYLOAD = {"status": "Error"} if not self.for_article else {"article_status": "Error", "article_error_status": error}
+        PAYLOAD['created_by'] = "JS_Error"
+
+        self.API.update(article_id, PAYLOAD)
 
     def __check_lazy(self, url: str, json_file: str):
         """
@@ -599,8 +737,6 @@ class ParseArticle(threading.Thread):
             
         return False
 
-
-            
 
     def stop(self):
         """
