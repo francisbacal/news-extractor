@@ -1,3 +1,5 @@
+import os;
+
 class Options(object):
     """
     Options class containing configuration for global parser
@@ -6,21 +8,21 @@ class Options(object):
         """
         Class initialization method
         """
-        self.token = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.f2X7W_6J8g6y-jKto1fMj5zq7QkOLu9WBGw5b-sHAIc"
+        self.token = f"Bearer {os.environ['API_TOKEN']}"
         self.testing = False
         self.limit = 1
         self.queued = False
         self.include_error = False
 
         # END POINT SETTINGS
-        self.MMI_API_HOST = 'http://192.168.3.143'
-        self.MMI_API_NAME = 'mmi-endpoints'
+        self.API_HOST = os.environ['API_HOST']
+        self.API_NAME = os.environ['API_NAME']
         self.LAMBDA_API_NAME = 'lambda-api'
-        self.MMI_API_VERSION = 'v0'                            
-        self.MMI_API_SETTINGS = {
-            'main': (self.MMI_API_NAME,),
+        self.API_VERSION = 'v0'                            
+        self.API_SETTINGS = {
+            'main': (self.API_NAME,),
             'lambda-api': (self.LAMBDA_API_NAME,),
-            'version': ('/main', self.MMI_API_VERSION),
+            'version': ('/main', self.API_VERSION),
             'lambda-article': ('/lambda-api', 'article'),
             'lambda-article-media-value': ('/lambda-article', 'media_values'),
             'global-link': ('/version', 'global-link'),
@@ -39,12 +41,12 @@ class Options(object):
         self.END_POINTS = dict(self.__get_end_points())
     
     def __get_end_points(self):
-        for name, path in self.MMI_API_SETTINGS.items():
+        for name, path in self.API_SETTINGS.items():
             yield name, list(self.__expand_path(name))
 
     def __expand_path(self, name):
 
-        path = self.MMI_API_SETTINGS[name]
+        path = self.API_SETTINGS[name]
         for name in path:
             if name[0] != '/':
                 yield "/" + name
@@ -61,9 +63,9 @@ class Options(object):
         paths = reduce(lambda a, b: a + b, self.END_POINTS[endpoint])
 
         if endpoint.startswith("lambda"):
-            HOST = self.MMI_API_HOST + ":3030"
+            HOST = f"{self.API_HOST}:{os.environ['API_LAMBDA_PORT']}"
         else:
-            HOST = self.MMI_API_HOST + ":4040"
+            HOST = f"{self.API_HOST}:{os.environ['API_PORT']}"
 
         return urljoin(HOST, paths)
 

@@ -6,7 +6,7 @@ from .stopwords import Stopwords
 from .variables import *
 from unidecode import unidecode
 
-import random, time, traceback, requests
+import random, time, traceback, requests, os
 
 #---------- UNICODE ----------#
 def unicode(text: str):
@@ -79,7 +79,7 @@ def name_entity(authors: list):
     filtered_authors = []
 
     for author in authors:
-        url = 'http://192.168.3.113:8000/api/name_entity'
+        url = os.environ['NAME_ENTITY_EP']
         headers = {"Content-Type" : "application/json", "Accept": "*/*",}
         payload = {"entity_filter": ["PERSON"] , "content": author, "entities_only" : True}
 
